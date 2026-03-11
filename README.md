@@ -14,28 +14,25 @@
 - ✅ 交互式选择 Agent 可用模型（多选，复选框）
 - ✅ 自动备份配置文件
 - ✅ 彩色输出，清晰易读
-- ✅ 支持 uv 全局安装
+- ✅ 支持多 Provider
 
-## 安装
+## 使用
 
-### 前置要求
+### uvx 免安装运行（推荐）
 
-- Python 3.8+
-- [uv](https://docs.astral.sh/uv/) (推荐) 或 pip
-
-### 全局安装（推荐）
+无需安装，直接运行：
 
 ```bash
-# 从本地安装
-uv tool install /path/to/openclaw-newapi-model-sync
-
-# 或从 GitHub 安装
-uv tool install git+https://github.com/deepwzh/openclaw-newapi-model-sync.git
+uvx --from git+https://github.com/deepwzh/openclaw-newapi-model-sync.git openclaw-sync-models
 ```
 
-安装后可以直接使用：
+### 全局安装
 
 ```bash
+# 从 GitHub 安装
+uv tool install git+https://github.com/deepwzh/openclaw-newapi-model-sync.git
+
+# 安装后直接使用
 openclaw-sync-models
 ```
 
@@ -49,9 +46,7 @@ source .venv/bin/activate
 uv pip install -e .
 ```
 
-## 使用
-
-### 基本用法
+## 命令行参数
 
 ```bash
 # 使用默认配置路径，交互式选择 provider
@@ -67,14 +62,12 @@ openclaw-sync-models -c /path/to/openclaw.json
 openclaw-sync-models -c /path/to/openclaw.json -p my-provider
 ```
 
-### 命令行参数
-
 | 参数 | 说明 |
 |------|------|
 | `-c, --config` | 指定配置文件路径（默认: `~/.openclaw/openclaw.json`） |
 | `-p, --provider` | 指定 provider 名称，不指定则交互式选择 |
 
-### 前提条件
+## 前提条件
 
 确保你的 OpenClaw 配置文件 (`~/.openclaw/openclaw.json`) 中已配置 provider：
 
@@ -101,15 +94,16 @@ openclaw-sync-models -c /path/to/openclaw.json -p my-provider
 - 使用 `-p` 参数直接指定
 - 不指定参数，交互式选择
 
-### 交互流程
+## 交互流程
 
 1. **加载配置** - 读取现有 `openclaw.json`
-2. **获取模型** - 从 New API 拉取模型列表
-3. **同步 Provider** - 将模型列表写入 `models.providers.new-api.models`
-4. **配置 Agent**（可选）
+2. **选择 Provider** - 选择要同步的 provider
+3. **获取模型** - 从 API 拉取模型列表
+4. **同步 Provider** - 将模型列表写入配置
+5. **配置 Agent**（可选）
    - 选择主模型 → `agents.defaults.model.primary`
    - 选择可用模型 → `agents.defaults.models`
-5. **备份并写入** - 自动备份原配置，写入新配置
+6. **备份并写入** - 自动备份原配置，写入新配置
 
 ### 更新后
 
@@ -146,7 +140,7 @@ openclaw gateway restart
 ## 卸载
 
 ```bash
-uv tool uninstall openclaw-model-sync
+uv tool uninstall openclaw-newapi-model-sync
 ```
 
 ## 项目结构
@@ -156,6 +150,7 @@ openclaw-newapi-model-sync/
 ├── openclaw_model_sync.py   # 主程序
 ├── pyproject.toml           # 项目配置
 ├── README.md                # 本文档
+├── LICENSE                  # MIT License
 └── .gitignore               # Git 忽略规则
 ```
 
