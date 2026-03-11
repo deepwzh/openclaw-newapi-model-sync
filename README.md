@@ -54,16 +54,29 @@ uv pip install -e .
 ### 基本用法
 
 ```bash
-# 使用默认配置路径 (~/.openclaw/openclaw.json)
+# 使用默认配置路径，交互式选择 provider
 openclaw-sync-models
+
+# 指定 provider 名称
+openclaw-sync-models -p new-api
 
 # 指定配置文件路径
 openclaw-sync-models -c /path/to/openclaw.json
+
+# 组合使用
+openclaw-sync-models -c /path/to/openclaw.json -p my-provider
 ```
+
+### 命令行参数
+
+| 参数 | 说明 |
+|------|------|
+| `-c, --config` | 指定配置文件路径（默认: `~/.openclaw/openclaw.json`） |
+| `-p, --provider` | 指定 provider 名称，不指定则交互式选择 |
 
 ### 前提条件
 
-确保你的 OpenClaw 配置文件 (`~/.openclaw/openclaw.json`) 中已配置 `new-api` provider：
+确保你的 OpenClaw 配置文件 (`~/.openclaw/openclaw.json`) 中已配置 provider：
 
 ```json
 {
@@ -73,13 +86,20 @@ openclaw-sync-models -c /path/to/openclaw.json
         "baseUrl": "http://your-new-api-server:3000/v1",
         "apiKey": "your-api-key",
         "api": "openai-completions"
+      },
+      "another-provider": {
+        "baseUrl": "http://another-server:3000/v1",
+        "apiKey": "another-api-key",
+        "api": "openai-completions"
       }
     }
   }
 }
 ```
 
-工具会自动从现有配置中读取 API 地址和密钥，无需额外配置。
+工具会自动识别所有可用的 provider，你可以：
+- 使用 `-p` 参数直接指定
+- 不指定参数，交互式选择
 
 ### 交互流程
 

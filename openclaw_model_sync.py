@@ -62,7 +62,7 @@ def print_info(text: str):
 
 
 class ModelSyncCLI:
-    def __init__(self, config_path: str = None):
+    def __init__(self, config_path: str = None, provider_name: str = None):
         if config_path:
             self.config_path = Path(config_path)
         else:
@@ -71,6 +71,7 @@ class ModelSyncCLI:
             self.config_path = openclaw_dir / "openclaw.json"
         
         self.config = {}
+        self.provider_name = provider_name  # 可能为 None，需要后续选择
         self.api_base = None
         self.api_key = None
         
@@ -84,19 +85,7 @@ class ModelSyncCLI:
             with open(self.config_path, 'r', encoding='utf-8') as f:
                 self.config = json.load(f)
             
-            # 提取 API 配置
-            providers = self.config.get("models", {}).get("providers", {})
-            new_api = providers.get("new-api", {})
-            
-            self.api_base = new_api.get("baseUrl", "http://127.0.0.1:3000/v1")
-            self.api_key = new_api.get("apiKey", "")
-            
-            if not self.api_key:
-                print_error("配置中未找到 API Key")
-                return False
-                
             print_success(f"已加载配置: {self.config_path}")
-            print_info(f"API 地址: {self.api_base}")
             return True
             
         except json.JSONDecodeError as e:
@@ -105,6 +94,71 @@ class ModelSyncCLI:
         except Exception as e:
             print_error(f"加载配置失败: {e}")
             return False
+    
+    def get_available_providers(self) -> List[str]:
+        """获取配置中所有可用的 provider 名称"""
+        providers = self.config.get("models", {}).get("providers", {})
+        return list(providers.keys())
+    
+    def select_provider(self) -> Optional[str]:
+        """交互式选择 provider"""
+        providers = self.get_available_providers()
+        
+        if not providers:
+            print_error("配置中没有找到任何 provider")
+            return None
+        
+        if len(providers) == 1:
+            selected = providers[0]
+            print_info(f"只有一个 provider，自动选择: {selected}")
+            return selected
+        
+        print_header("选择 Provider")
+        print_info(f"发现 {len(providers)} 个 provider")
+        
+        choices = [
+            questionary.Choice(
+                title=f"  {p}",
+                value=p
+            )
+            for p in providers
+        ]
+        
+        try:
+            # 默认选择第一个或之前指定的
+            default_value = self.provider_name if self.provider_name in providers else providers[0]
+            
+            selected = questionary.select(
+                "选择要同步的 provider:",
+                choices=choices,
+                default=default_value,
+                style=custom_style,
+                use_arrow_keys=True
+            ).ask()
+            
+            if selected:
+                print_success(f"已选择 provider: {selected}")
+            
+            return selected
+            
+        except KeyboardInterrupt:
+            print("\n")
+            return None
+    
+    def load_provider_config(self) -> bool:
+        """加载指定 provider 的 API 配置"""
+        providers = self.config.get("models", {}).get("providers", {})
+        provider_config = providers.get(self.provider_name, {})
+        
+        self.api_base = provider_config.get("baseUrl", "http://127.0.0.1:3000/v1")
+        self.api_key = provider_config.get("apiKey", "")
+        
+        if not self.api_key:
+            print_error(f"Provider '{self.provider_name}' 配置中未找到 API Key")
+            return False
+        
+        print_info(f"API 地址: {self.api_base}")
+        return True
     
     def fetch_models(self) -> List[Dict]:
         """从 API 获取模型列表"""
@@ -163,7 +217,7 @@ class ModelSyncCLI:
         
         model_info = {
             "id": m_id,
-            "name": f"{m_id} (New API)",
+            "name": f"{m_id} ({self.provider_name})",
             "reasoning": is_reasoning,
             "input": ["text", "image"],
             "cost": {
@@ -197,6 +251,10 @@ class ModelSyncCLI:
         
         return f"{reasoning_tag}{model['id']:<45} [{context_str:>6}]"
     
+    def model_id_with_provider(self, model_id: str) -> str:
+        """生成带 provider 前缀的模型 ID"""
+        return f"{self.provider_name}/{model_id}"
+    
     def select_primary_model(self, 
                              models: List[Dict],
                              default_primary: Optional[str] = None) -> Optional[str]:
@@ -206,7 +264,7 @@ class ModelSyncCLI:
         choices = [
             questionary.Choice(
                 title=self.format_model_choice(model),
-                value=f"new-api/{model['id']}"
+                value=self.model_id_with_provider(model['id'])
             )
             for model in models
         ]
@@ -252,8 +310,8 @@ class ModelSyncCLI:
         choices = [
             questionary.Choice(
                 title=self.format_model_choice(model),
-                value=f"new-api/{model['id']}",
-                checked=(f"new-api/{model['id']}" in default_set)
+                value=self.model_id_with_provider(model['id']),
+                checked=(self.model_id_with_provider(model['id']) in default_set)
             )
             for model in models
         ]
@@ -297,15 +355,15 @@ class ModelSyncCLI:
                 self.config["models"] = {}
             if "providers" not in self.config["models"]:
                 self.config["models"]["providers"] = {}
-            if "new-api" not in self.config["models"]["providers"]:
-                self.config["models"]["providers"]["new-api"] = {
+            if self.provider_name not in self.config["models"]["providers"]:
+                self.config["models"]["providers"][self.provider_name] = {
                     "baseUrl": self.api_base,
                     "apiKey": self.api_key,
                     "api": "openai-completions"
                 }
             
             # 更新模型列表
-            self.config["models"]["providers"]["new-api"]["models"] = processed_models
+            self.config["models"]["providers"][self.provider_name]["models"] = processed_models
             
             # 备份并写入
             self.backup_config()
@@ -323,7 +381,7 @@ class ModelSyncCLI:
         """
         从现有配置中读取 Agent 默认主模型和可用模型，并根据当前可用模型列表进行过滤。
         """
-        available_ids = {f"new-api/{m['id']}" for m in processed_models}
+        available_ids = {self.model_id_with_provider(m['id']) for m in processed_models}
 
         agents_cfg = self.config.get("agents", {})
         defaults_cfg = agents_cfg.get("defaults", {})
@@ -393,18 +451,37 @@ class ModelSyncCLI:
         if not self.load_config():
             sys.exit(1)
         
-        # 2. 获取模型
+        # 2. 选择 provider（如果未指定）
+        if not self.provider_name:
+            self.provider_name = self.select_provider()
+            if not self.provider_name:
+                print_error("未选择 provider")
+                sys.exit(1)
+        else:
+            # 验证指定的 provider 是否存在
+            providers = self.get_available_providers()
+            if self.provider_name not in providers:
+                print_error(f"Provider '{self.provider_name}' 不存在")
+                print_info(f"可用的 provider: {', '.join(providers)}")
+                sys.exit(1)
+            print_info(f"使用指定的 provider: {self.provider_name}")
+        
+        # 3. 加载 provider 的 API 配置
+        if not self.load_provider_config():
+            sys.exit(1)
+        
+        # 4. 获取模型
         raw_models = self.fetch_models()
         if not raw_models:
             print_error("无法继续：未获取到模型数据")
             sys.exit(1)
         
-        # 3. 处理模型
+        # 5. 处理模型
         processed_models = [self.process_model(m) for m in raw_models]
         
-        # 4. 先同步模型列表到 provider
+        # 6. 先同步模型列表到 provider
         print_header("同步模型列表")
-        print_info(f"将 {len(processed_models)} 个模型同步到 new-api provider")
+        print_info(f"将 {len(processed_models)} 个模型同步到 {self.provider_name} provider")
         
         if not self.sync_provider_models(processed_models):
             print_error("同步失败")
@@ -412,7 +489,7 @@ class ModelSyncCLI:
         
         print_success("Provider 模型列表已同步")
         
-        # 5. 询问是否配置 agent 默认模型
+        # 7. 询问是否配置 agent 默认模型
         try:
             configure_agent = questionary.confirm(
                 "是否配置 Agent 默认模型?",
@@ -428,22 +505,22 @@ class ModelSyncCLI:
             print_success("模型列表已同步，Agent 配置已跳过")
             sys.exit(0)
 
-        # 6. 从现有配置中读取 Agent 默认主模型和可用模型，作为本次交互的默认值
+        # 8. 从现有配置中读取 Agent 默认主模型和可用模型，作为本次交互的默认值
         default_primary, default_agent_models = self.get_agent_defaults(processed_models)
 
-        # 7. 选择主模型
+        # 9. 选择主模型
         primary_model = self.select_primary_model(
             processed_models,
             default_primary=default_primary
         )
         
-        # 8. 选择 agent 可用模型
+        # 10. 选择 agent 可用模型
         agent_models = self.select_agent_models(
             processed_models,
             default_models=default_agent_models
         )
         
-        # 9. 确认更新 agent 配置
+        # 11. 确认更新 agent 配置
         if primary_model or agent_models:
             print_header("确认 Agent 配置")
             if primary_model:
@@ -489,10 +566,15 @@ def main():
         help="指定配置文件路径 (默认: ~/.openclaw/openclaw.json)",
         default=None
     )
+    parser.add_argument(
+        "-p", "--provider",
+        help="指定 provider 名称 (如 new-api)，不指定则交互式选择",
+        default=None
+    )
     
     args = parser.parse_args()
     
-    cli = ModelSyncCLI(args.config)
+    cli = ModelSyncCLI(args.config, args.provider)
     cli.run()
 
 
