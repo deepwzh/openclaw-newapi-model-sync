@@ -1,23 +1,36 @@
-# OpenClaw 模型同步工具
+# OpenClaw New API 模型同步工具
 
-交互式 CLI 工具，用于从 New API 获取模型列表并同步到 OpenClaw 配置。
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+交互式 CLI 工具，用于从 New API 获取模型列表并同步到 OpenClaw 配置文件。
 
 ## 功能特性
 
 - ✅ 自动从 New API 获取可用模型
 - ✅ 智能识别推理模型（标记 🧠）
-- ✅ 显示上下文窗口大小
+- ✅ 自动设置上下文窗口和输出限制
 - ✅ 交互式选择主模型（单选）
 - ✅ 交互式选择 Agent 可用模型（多选，复选框）
 - ✅ 自动备份配置文件
 - ✅ 彩色输出，清晰易读
+- ✅ 支持 uv 全局安装
 
 ## 安装
+
+### 前置要求
+
+- Python 3.8+
+- [uv](https://docs.astral.sh/uv/) (推荐) 或 pip
 
 ### 全局安装（推荐）
 
 ```bash
-uv tool install ~/tools/openclaw-model-sync
+# 从本地安装
+uv tool install /path/to/openclaw-newapi-model-sync
+
+# 或从 GitHub 安装
+uv tool install git+https://github.com/deepwzh/openclaw-newapi-model-sync.git
 ```
 
 安装后可以直接使用：
@@ -29,7 +42,8 @@ openclaw-sync-models
 ### 开发模式
 
 ```bash
-cd ~/tools/openclaw-model-sync
+git clone https://github.com/deepwzh/openclaw-newapi-model-sync.git
+cd openclaw-newapi-model-sync
 uv venv
 source .venv/bin/activate
 uv pip install -e .
@@ -37,30 +51,77 @@ uv pip install -e .
 
 ## 使用
 
+### 基本用法
+
 ```bash
 # 使用默认配置路径 (~/.openclaw/openclaw.json)
 openclaw-sync-models
 
-# 或指定配置文件
+# 指定配置文件路径
 openclaw-sync-models -c /path/to/openclaw.json
 ```
 
-## 交互流程
+### 前提条件
 
-1. **加载配置** - 读取现有 openclaw.json
+确保你的 OpenClaw 配置文件 (`~/.openclaw/openclaw.json`) 中已配置 `new-api` provider：
+
+```json
+{
+  "models": {
+    "providers": {
+      "new-api": {
+        "baseUrl": "http://your-new-api-server:3000/v1",
+        "apiKey": "your-api-key",
+        "api": "openai-completions"
+      }
+    }
+  }
+}
+```
+
+工具会自动从现有配置中读取 API 地址和密钥，无需额外配置。
+
+### 交互流程
+
+1. **加载配置** - 读取现有 `openclaw.json`
 2. **获取模型** - 从 New API 拉取模型列表
-3. **选择主模型** - 单选，设置到 `agents.defaults.model.primary`
-4. **选择可用模型** - 多选（空格勾选），设置到 `agents.defaults.models`
-5. **确认更新** - 显示摘要并确认
-6. **备份并写入** - 自动备份原配置，写入新配置
+3. **同步 Provider** - 将模型列表写入 `models.providers.new-api.models`
+4. **配置 Agent**（可选）
+   - 选择主模型 → `agents.defaults.model.primary`
+   - 选择可用模型 → `agents.defaults.models`
+5. **备份并写入** - 自动备份原配置，写入新配置
 
-## 更新后
+### 更新后
 
-记得重启 Gateway：
+重启 OpenClaw Gateway 以应用更改：
 
 ```bash
 openclaw gateway restart
 ```
+
+## 模型识别规则
+
+### 推理模型标记
+
+以下模型会被标记为推理模型（🧠）：
+- 名称包含 `thinking`
+- 名称包含 `pro`
+- 名称包含 `gpt-5`
+- 名称包含 `glm-4.6`
+- 名称包含 `plus`
+- 名称包含 `o1` 或 `o3`
+
+### 上下文窗口
+
+- **Gemini 系列**: 1M tokens 输入，64K 输出
+- **Claude 系列**: 200K tokens 输入，8K 输出
+- **其他模型**: 128K tokens 输入，16K 输出
+
+### API 格式
+
+- **GPT 系列**: 自动设置 `openai-responses`
+- **Claude 系列**: 自动设置 `anthropic-messages`
+- **其他模型**: 沿用 provider 默认配置
 
 ## 卸载
 
@@ -68,7 +129,31 @@ openclaw gateway restart
 uv tool uninstall openclaw-model-sync
 ```
 
+## 项目结构
+
+```
+openclaw-newapi-model-sync/
+├── openclaw_model_sync.py   # 主程序
+├── pyproject.toml           # 项目配置
+├── README.md                # 本文档
+└── .gitignore               # Git 忽略规则
+```
+
+## 安全说明
+
+- ⚠️ **请勿提交包含 API Key 的配置文件到版本控制**
+- API 凭据从现有 OpenClaw 配置中读取，工具本身不存储任何密钥
+- 每次更新前会自动备份原配置文件 (`.json.bak`)
+
 ## 依赖
 
-- Python 3.8+
-- questionary (交互式 TUI)
+- [questionary](https://github.com/tmbo/questionary) - 交互式 TUI
+
+## License
+
+MIT License - 详见 [LICENSE](LICENSE) 文件
+
+## 相关项目
+
+- [OpenClaw](https://github.com/openclaw/openclaw) - 你的个人 AI 助手框架
+- [New API](https://github.com/Calcium-Ion/new-api) - OpenAI API 管理与分发系统
