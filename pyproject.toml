@@ -1,0 +1,15 @@
+[project]
+name = "openclaw-model-sync"
+version = "0.1.0"
+description = "OpenClaw 模型同步 CLI 工具"
+requires-python = ">=3.8"
+dependencies = [
+    "questionary>=2.0.0",
+]
+
+[project.scripts]
+openclaw-sync-models = "openclaw_model_sync:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
